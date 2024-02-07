@@ -1,4 +1,13 @@
 <!doctype html>
+<script>
+	let socket;
+	onMount(() => {
+		socket = new WebSocket('ws://localhost:4000');
+		socket.addEventListener('open', () => {
+			console.log('Opened');
+		});
+	});
+</script>
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
