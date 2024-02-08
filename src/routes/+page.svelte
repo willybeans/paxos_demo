@@ -3,25 +3,43 @@
 
 	let sockets = [];
   let status = ['dead', 'dead', 'dead', 'dead', 'dead'];
+  const nodes = [4001, 4002, 4003, 4004, 4005];
 
 	onMount(() => {
-    for (let i = 4001; i<4006; i++) {
-      const socket = new WebSocket(`ws://localhost:${i}`)
+    for (const node of nodes) {
+      const socket = new WebSocket(`ws://localhost:${node}`)
 		  socket.addEventListener('open', () => {
 	  		console.log('Opened');
   		});
 
+      socket.addEventListener('close', () => {
+        status[node-4000] = 'dead'
+      })
+
+      socket.addEventListener('error', (e) => {
+        status[node-4000] = 'dead'
+      })
+
       socket.onmessage = (event) => {
-        console.log(event.data)
-        if (event.data.slice(6) === 'leader') {
-          if (event.data.slice(-4) == i) {
-            status[i-4001] = 'leader'
+        if (event.data === 'pong') {
+          // do nothing
+        } else if (event.data === 'dead') {
+          status[node-4001] = 'dead'
+        } else if (event.data.slice(0, 6) === 'leader') {
+          if (event.data.slice(-4) === (node-1000).toString()) {
+            status[node-4001] = 'leader'
           } else {
-            status[i-4001] = 'calm'
+            status[node-4001] = 'follower'
           }
         } else {
-          status[i-4001] = 'panik'
+          status[node-4001] = 'lost'
         }
+      }
+
+      startPinging(socket)
+
+      socket.onerror = (event) => {
+        console.log(event)
       }
 
       sockets.push(socket)
@@ -30,44 +48,33 @@
 
 	});
 
-  function statusUpdate() {
-    for (let i = 0; i < 5; i++) {
-      if (sockets[i]) {
-        console.log(i)
-        sockets[i].send('status')
-      } else {
-        status[i] = 'dead'
-      }
-    }
+  function knockOut(i) {
+    sockets[i].send('pause')
   }
 
+  function startPinging(socket) {
+    const pingInterval = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send('status');
+      }
+    }, 250)
+  }
 </script>
 
 <main>
 <h2>Welcome to <s>the Thunderdome</s> Paxos</h2>
 
-{#if (status[0] === 'null')}
-a
-{:else if (status[0] === 'leader')}
-b
-{:else if (status[0] === 'dead')}
-d
-{:else}
-c
-{/if}
-
-
 <div class="row">
   {#each Array.from(Array(5).keys()) as column (column)}
     {@const aStatus = status[column]}
-    {@const panik = aStatus === 'null'}
+    {@const lost = aStatus === 'lost'}
     {@const leader = aStatus === 'leader'}
     {@const dead = aStatus === 'dead'}
-    <div class:leader class:panik class:dead>
-      <button on:click={statusUpdate} class:leader class:panik class:dead></button>
+    <div class="child" class:leader class:lost class:dead>
+      <button on:click={() => knockOut(column)} class:leader class:lost class:dead></button>
     </div>
   {/each}
-  </div>
+</div>
 
 </main>
 
@@ -83,11 +90,20 @@ c
     background-color: purple
   }
 
-  .panik button{
+  .lost button{
     background-color: red
   }
 
   .dead button{
     background-color: black
+  }
+
+  .row {
+    text-align: center;
+  }
+
+  .child {
+    display: inline-block;
+    vertical-align: middle;
   }
 </style>
